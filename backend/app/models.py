@@ -1,12 +1,12 @@
 from uuid import UUID
 from enum import Enum
 from typing import Optional
-from datetime import date
+from datetime import date, timedelta
 from pydantic import BaseModel
 from datetime import date, datetime, timezone
 from typing import Annotated, List, Optional
 import uuid
-from app.schemas import RemittanceStatus
+# from app.schemas import RemittanceStatus
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel, Enum
 from sqlmodel import SQLModel, Field, Relationship
@@ -57,11 +57,15 @@ class User(UserBase, table=True):
     hashed_password: str
     items: list["Item"] = Relationship(
         back_populates="owner", cascade_delete=True)
-    # relationships addded
+    # add relationships
     worklogs: list["WorkLog"] = Relationship(
-        back_populates="user", cascade_delete=True)
+        back_populates="user",  # matches WorkLog.user
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
     remittances: list["Remittance"] = Relationship(
-        back_populates="user", cascade_delete=True)
+        back_populates="user",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 # Properties to return via API, id is always required
 
@@ -133,96 +137,132 @@ class NewPassword(SQLModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
-# implementation
-class Adjustment(SQLModel, table=True):
-    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    worklog_id: UUID = Field(foreign_key="worklog.id")
-    description: str
-    amount: float
+# # implementation
 
-    worklog: "WorkLog" = Relationship(back_populates="adjustments")
-
-
-class TimeSegment(SQLModel, table=True):
-    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    worklog_id: UUID = Field(foreign_key="worklog.id")
-    start: datetime
-    end: datetime
-
-    worklog: "WorkLog" = Relationship(back_populates="time_segments")
-
-
+# -----------------------------
+# Task Model
+# -----------------------------
 class Task(SQLModel, table=True):
+    """A task that workers can log time against."""
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    title: str
-    description: str
-    worklogs: List["WorkLog"] = Relationship(back_populates="task")
+    title: str = Field(index=True)
+    description: Optional[str] = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
 
+    # Relationships
+    worklogs: List["WorkLog"] = Relationship(back_populates="task")
+
+# -----------------------------
+# WorkLog Model
+# -----------------------------
+
 
 class WorkLog(SQLModel, table=True):
-    """
-    Container for all work done against a task by a user.
-    Work is tracked via time_segments and adjustments.
-    """
+    """Container for all work done against a task by a user."""
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id", index=True)
     task_id: UUID = Field(foreign_key="task.id", index=True)
-    created_at: datetime = Field(datetime.now(timezone.utc))
-    updated_at: datetime = Field(datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user: "User" = Relationship(back_populates="worklogs")
     task: Task = Relationship(back_populates="worklogs")
-    time_segments: List[TimeSegment] = Relationship(
-        back_populates="worklog",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    time_segments: List["TimeSegment"] = Relationship(
+        back_populates="worklog", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    adjustments: List[Adjustment] = Relationship(
-        back_populates="worklog",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
+
     remittance_worklogs: List["RemittanceWorkLog"] = Relationship(
         back_populates="worklog"
     )
 
+    # Computed properties
+    @property
+    def total_duration_minutes(self) -> float:
+        return sum(segment.duration_minutes for segment in self.time_segments)
+
+    @property
+    def total_amount(self) -> float:
+        return sum(ts.duration for ts in self.time_segments)
+
+# -----------------------------
+# TimeSegment Model
+# -----------------------------
+
+
+class TimeSegment(SQLModel, table=True):
+    """A single time recording session."""
+    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    worklog_id: UUID = Field(foreign_key="worklog.id", index=True)
+    user_id: UUID = Field(foreign_key="user.id", index=True)
+    start_time: datetime
+    end_time: datetime
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    recorded_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    worklog: WorkLog = Relationship(back_populates="time_segments")
+
+    # Computed properties
+    @property
+    def duration_minutes(self) -> float:
+        return (self.end_time - self.start_time).total_seconds() / 60
+
+    @property
+    def duration(self) -> float:
+        return self.duration_minutes
+
+
+# -----------------------------
+# Remittance Model
+# -----------------------------
+
 
 class Remittance(SQLModel, table=True):
-    """
-    A single payout (settlement) for a user covering a time period.
-    Groups multiple worklogs into one payment batch.
-    """
+    """Payment batch for a user covering a period."""
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     user_id: UUID = Field(foreign_key="user.id", index=True)
-    total_amount: float = Field(description="Total amount to be paid")
-    status: str = Field(
-        default=RemittanceStatus.remitted,
-    )
-    period_start: date = Field(description="Start of settlement period")
-    period_end: date = Field(description="End of settlement period")
-    created_at: datetime = Field(default_factory=datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=datetime.now(timezone.utc))
-    paid_at: Optional[datetime] = Field(
-        default=None,
-        description="When payment was completed"
-    )
+    total_amount: float
+    status: str = Field(default="PENDING")
+    period_start: datetime
+    period_end: datetime
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+    paid_at: Optional[datetime] = None
 
     # Relationships
     user: "User" = Relationship(back_populates="remittances")
     remittance_worklogs: List["RemittanceWorkLog"] = Relationship(
-        back_populates="remittance",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        back_populates="remittance", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+
+# -----------------------------
+# RemittanceWorkLog Model
+# -----------------------------
 
 
 class RemittanceWorkLog(SQLModel, table=True):
+    """Links worklogs to remittances with amount tracking."""
     id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    remittance_id: UUID = Field(foreign_key="remittance.id")
-    worklog_id: UUID = Field(foreign_key="worklog.id")
+    remittance_id: UUID = Field(foreign_key="remittance.id", index=True)
+    worklog_id: UUID = Field(foreign_key="worklog.id", index=True)
     amount: float
-    remittance: "Remittance" = Relationship(
-        back_populates="remittance_worklogs")
-    worklog: "WorkLog" = Relationship(back_populates="remittance_worklogs")
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    remittance: Remittance = Relationship(back_populates="remittance_worklogs")
+    worklog: WorkLog = Relationship(back_populates="remittance_worklogs")

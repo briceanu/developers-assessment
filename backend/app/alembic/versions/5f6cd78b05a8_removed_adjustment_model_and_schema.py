@@ -1,8 +1,8 @@
-"""models relationship 
+"""Removed adjustment model and schema
 
-Revision ID: c7694a7e5c70
-Revises: bf4ee0534c19
-Create Date: 2026-01-28 20:44:48.097379
+Revision ID: 5f6cd78b05a8
+Revises: eb9d1c094022
+Create Date: 2026-02-01 00:40:28.329280
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c7694a7e5c70'
-down_revision: Union[str, Sequence[str], None] = 'bf4ee0534c19'
+revision: str = '5f6cd78b05a8'
+down_revision: Union[str, Sequence[str], None] = 'eb9d1c094022'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

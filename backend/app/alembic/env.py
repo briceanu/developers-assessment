@@ -5,7 +5,7 @@ import os
 from app.models import (
     SQLModel
 )
-
+import sqlmodel
 target_metadata = SQLModel.metadata
 
 

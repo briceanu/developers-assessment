@@ -1,8 +1,8 @@
-"""models change
+"""Create tables 
 
-Revision ID: bf4ee0534c19
-Revises: cc29e5d99ab3
-Create Date: 2026-01-28 20:42:54.658845
+Revision ID: 81b416ad79a8
+Revises: 
+Create Date: 2026-01-31 16:38:47.058992
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 import sqlmodel
 
 # revision identifiers, used by Alembic.
-revision: str = 'bf4ee0534c19'
-down_revision: Union[str, Sequence[str], None] = 'cc29e5d99ab3'
+revision: str = '81b416ad79a8'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -26,7 +26,34 @@ def upgrade() -> None:
                     sa.Column(
                         'title', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
                     sa.Column('description', sqlmodel.sql.sqltypes.AutoString(),
-                              nullable=False),
+                              nullable=True),
+                    sa.Column('created_at', sa.DateTime(), nullable=False),
+                    sa.Column('updated_at', sa.DateTime(), nullable=False),
+                    sa.PrimaryKeyConstraint('id')
+                    )
+    op.create_index(op.f('ix_task_title'), 'task', ['title'], unique=False)
+    op.create_table('user',
+                    sa.Column('email', sqlmodel.sql.sqltypes.AutoString(
+                        length=255), nullable=False),
+                    sa.Column('is_active', sa.Boolean(), nullable=False),
+                    sa.Column('is_superuser', sa.Boolean(), nullable=False),
+                    sa.Column('full_name', sqlmodel.sql.sqltypes.AutoString(
+                        length=255), nullable=True),
+                    sa.Column('id', sa.Uuid(), nullable=False),
+                    sa.Column('hashed_password',
+                              sqlmodel.sql.sqltypes.AutoString(), nullable=False),
+                    sa.PrimaryKeyConstraint('id')
+                    )
+    op.create_index(op.f('ix_user_email'), 'user', ['email'], unique=True)
+    op.create_table('item',
+                    sa.Column('title', sqlmodel.sql.sqltypes.AutoString(
+                        length=255), nullable=False),
+                    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(
+                        length=255), nullable=True),
+                    sa.Column('id', sa.Uuid(), nullable=False),
+                    sa.Column('owner_id', sa.Uuid(), nullable=False),
+                    sa.ForeignKeyConstraint(
+                        ['owner_id'], ['user.id'], ondelete='CASCADE'),
                     sa.PrimaryKeyConstraint('id')
                     )
     op.create_table('remittance',
@@ -35,8 +62,8 @@ def upgrade() -> None:
                     sa.Column('total_amount', sa.Float(), nullable=False),
                     sa.Column(
                         'status', sqlmodel.sql.sqltypes.AutoString(), nullable=False),
-                    sa.Column('period_start', sa.Date(), nullable=False),
-                    sa.Column('period_end', sa.Date(), nullable=False),
+                    sa.Column('period_start', sa.DateTime(), nullable=False),
+                    sa.Column('period_end', sa.DateTime(), nullable=False),
                     sa.Column('created_at', sa.DateTime(), nullable=False),
                     sa.Column('updated_at', sa.DateTime(), nullable=False),
                     sa.Column('paid_at', sa.DateTime(), nullable=True),
@@ -62,43 +89,71 @@ def upgrade() -> None:
     op.create_table('adjustment',
                     sa.Column('id', sa.Uuid(), nullable=False),
                     sa.Column('worklog_id', sa.Uuid(), nullable=False),
-                    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(),
-                              nullable=False),
                     sa.Column('amount', sa.Float(), nullable=False),
+                    sa.Column(
+                        'reason', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+                    sa.Column('applied_at', sa.DateTime(), nullable=False),
+                    sa.Column('created_at', sa.DateTime(), nullable=False),
                     sa.ForeignKeyConstraint(['worklog_id'], ['worklog.id'], ),
                     sa.PrimaryKeyConstraint('id')
                     )
+    op.create_index(op.f('ix_adjustment_worklog_id'),
+                    'adjustment', ['worklog_id'], unique=False)
     op.create_table('remittanceworklog',
                     sa.Column('id', sa.Uuid(), nullable=False),
                     sa.Column('remittance_id', sa.Uuid(), nullable=False),
                     sa.Column('worklog_id', sa.Uuid(), nullable=False),
                     sa.Column('amount', sa.Float(), nullable=False),
+                    sa.Column('created_at', sa.DateTime(), nullable=False),
                     sa.ForeignKeyConstraint(
                         ['remittance_id'], ['remittance.id'], ),
                     sa.ForeignKeyConstraint(['worklog_id'], ['worklog.id'], ),
                     sa.PrimaryKeyConstraint('id')
                     )
+    op.create_index(op.f('ix_remittanceworklog_remittance_id'),
+                    'remittanceworklog', ['remittance_id'], unique=False)
+    op.create_index(op.f('ix_remittanceworklog_worklog_id'),
+                    'remittanceworklog', ['worklog_id'], unique=False)
     op.create_table('timesegment',
                     sa.Column('id', sa.Uuid(), nullable=False),
                     sa.Column('worklog_id', sa.Uuid(), nullable=False),
-                    sa.Column('start', sa.DateTime(), nullable=False),
-                    sa.Column('end', sa.DateTime(), nullable=False),
+                    sa.Column('start_time', sa.DateTime(), nullable=False),
+                    sa.Column('end_time', sa.DateTime(), nullable=False),
+                    sa.Column('description', sqlmodel.sql.sqltypes.AutoString(),
+                              nullable=True),
+                    sa.Column(
+                        'notes', sqlmodel.sql.sqltypes.AutoString(), nullable=True),
+                    sa.Column('recorded_at', sa.DateTime(), nullable=False),
+                    sa.Column('created_at', sa.DateTime(), nullable=False),
+                    sa.Column('updated_at', sa.DateTime(), nullable=False),
                     sa.ForeignKeyConstraint(['worklog_id'], ['worklog.id'], ),
                     sa.PrimaryKeyConstraint('id')
                     )
+    op.create_index(op.f('ix_timesegment_worklog_id'),
+                    'timesegment', ['worklog_id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_timesegment_worklog_id'), table_name='timesegment')
     op.drop_table('timesegment')
+    op.drop_index(op.f('ix_remittanceworklog_worklog_id'),
+                  table_name='remittanceworklog')
+    op.drop_index(op.f('ix_remittanceworklog_remittance_id'),
+                  table_name='remittanceworklog')
     op.drop_table('remittanceworklog')
+    op.drop_index(op.f('ix_adjustment_worklog_id'), table_name='adjustment')
     op.drop_table('adjustment')
     op.drop_index(op.f('ix_worklog_user_id'), table_name='worklog')
     op.drop_index(op.f('ix_worklog_task_id'), table_name='worklog')
     op.drop_table('worklog')
     op.drop_index(op.f('ix_remittance_user_id'), table_name='remittance')
     op.drop_table('remittance')
+    op.drop_table('item')
+    op.drop_index(op.f('ix_user_email'), table_name='user')
+    op.drop_table('user')
+    op.drop_index(op.f('ix_task_title'), table_name='task')
     op.drop_table('task')
     # ### end Alembic commands ###
