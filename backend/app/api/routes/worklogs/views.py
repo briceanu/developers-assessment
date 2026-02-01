@@ -1,7 +1,7 @@
 from typing import List
 import uuid
 from fastapi import APIRouter, status
-from app.schemas import TimeSegmentOut, UpdateTimeSegmentIn, UpdateTimeSegmentOut, WorkLogCreateIn, WorkLogOut
+from app.schemas import RemittanceStatusSchemaIn, TimeSegmentOut, UpdateTimeSegmentIn, UpdateTimeSegmentOut, WorkLogCreateIn, WorkLogOut
 from .service import WorklogService
 from fastapi import APIRouter
 from app.api.deps import CurrentUser, SessionDep
@@ -27,15 +27,16 @@ def create_wroklog_for_user(
 
 
 @router.get(
-    "/get-all-worklogs", status_code=status.HTTP_200_OK, response_model=List[WorkLogOut]
+    "/list-all-worklogs", status_code=status.HTTP_200_OK, response_model=List[WorkLogOut]
 )
 def get_all_worklogs(
     session: SessionDep,
+    remittance_status: RemittanceStatusSchemaIn
 ) -> list[WorkLogOut]:
     """
     Get all worklogs.
     """
-    return WorklogService.get_all_wroklogs(session)
+    return WorklogService.get_all_wroklogs(session, remittance_status)
 
 
 @router.get(

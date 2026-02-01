@@ -6,7 +6,7 @@ from app.schemas import (
     WorkLogCreateIn,
     TimeSegmentIn,
     WorkLogOut,
-    UpdateTimeSegmentOut
+    UpdateTimeSegmentOut,
 )
 from fastapi import HTTPException
 from sqlmodel import Session, col, delete, select
@@ -32,10 +32,16 @@ class WorklogService:
                 status_code=404,
                 detail=f"No task with the id {worklog_in.task_id} found.",
             )
-        # creating the worklog and adding a list of time segments
+        # add together all the worked time
+        total_duration_minutes = sum(
+            (ts.end_time - ts.start_time).total_seconds() / 60
+            for ts in worklog_in.time_segments
+        )
+
         worklog = WorkLog(
             user_id=current_user.id,
             task_id=worklog_in.task_id,
+            total_duration_minutes=total_duration_minutes,
             time_segments=[
                 TimeSegment(
                     user_id=current_user.id,
@@ -57,9 +63,11 @@ class WorklogService:
     def get_all_wroklogs(session: Session) -> list[WorkLogOut]:
         """
         Get all the worklogs.
+        - `remittanceStatus`: Filter by remittance status. Accepts `REMITTED` or `UNREMITTED`.
         """
         worklogs = session.exec(
-            select(WorkLog).options(selectinload(WorkLog.time_segments))
+            select(WorkLog).options(
+                selectinload(WorkLog.time_segments))
         ).all()
 
         return [
@@ -70,7 +78,6 @@ class WorklogService:
                 created_at=worklog.created_at,
                 updated_at=worklog.updated_at,
                 total_duration_minutes=worklog.total_duration_minutes,
-                total_amount=worklog.total_amount,
                 segment_count=len(worklog.time_segments),
                 time_segments=[
                     TimeSegmentOut(
@@ -79,8 +86,6 @@ class WorklogService:
                         user_id=ts.user_id,
                         start_time=ts.start_time,
                         end_time=ts.end_time,
-                        duration_minutes=ts.duration_minutes,
-                        duration=ts.duration,
                         description=ts.description,
                         notes=ts.notes,
                         recorded_at=ts.recorded_at,
@@ -91,8 +96,7 @@ class WorklogService:
             for worklog in worklogs
         ]
 
-
-# a time segment can be questioned, removed, or adjusted.
+    # a time segment can be questioned, removed, or adjusted.
 
     def get_all_user_time_segments(
         session: Session, current_user: CurrentUser
@@ -153,7 +157,7 @@ class WorklogService:
         if not time_segment:
             raise HTTPException(
                 status_code=404,
-                detail=f"No time segment with the id {time_segment_id} found."
+                detail=f"No time segment with the id {time_segment_id} found.",
             )
         # check if the segment belongs to the logged in user
         if time_segment.user_id != current_user.id:
@@ -167,4 +171,4 @@ class WorklogService:
 
         session.commit()
         session.refresh(time_segment)
-        return UpdateTimeSegmentOut(description='Your data has been updated.')
+        return UpdateTimeSegmentOut(description="Your data has been updated.")

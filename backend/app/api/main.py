@@ -7,6 +7,7 @@ from app.api.routes.users import views as users_views
 from app.api.routes.utils import views as utils_views
 from app.api.routes.tasks import views as tasks_views
 from app.api.routes.worklogs import views as worklog_views
+from app.api.routes.remittance import views as remittance_views
 from app.core.config import settings
 
 api_router = APIRouter()
@@ -16,6 +17,7 @@ api_router.include_router(utils_views.router)
 api_router.include_router(items_views.router)
 api_router.include_router(tasks_views.router)
 api_router.include_router(worklog_views.router)
+api_router.include_router(remittance_views.router)
 
 
 if settings.ENVIRONMENT == "local":

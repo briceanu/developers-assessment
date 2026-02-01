@@ -1,3 +1,4 @@
+from enum import Enum
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -47,8 +48,6 @@ class TimeSegmentOut(BaseModel):
     user_id: UUID
     start_time: datetime
     end_time: datetime
-    duration_minutes: float
-    duration: float
     description: Optional[str]
     notes: Optional[str]
     recorded_at: datetime
@@ -65,13 +64,8 @@ class WorkLogOut(BaseModel):
     task_id: UUID
     created_at: datetime
     total_duration_minutes: float  # Calculated from time_segments
-    total_amount: float            # Calculated from time_segments + adjustments
     segment_count: int             # Number of time segments
     time_segments: list[TimeSegmentOut]
-
-    class Config:
-        from_attributes = True
-        orm_mode = True
 
 
 class DeleteTimeSegmentOut(BaseModel):
@@ -93,6 +87,13 @@ class UpdateTimeSegmentOut(BaseModel):
 # ============================================================================
 # USAGE EXAMPLE
 # ============================================================================
+
+
+class RemittanceStatusSchemaIn(str, Enum):
+    REMITTED = "REMITTED"
+    UNREMITTED = "UNREMITTED"
+
+
 """
 Example workflow:
 

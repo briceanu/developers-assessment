@@ -169,6 +169,7 @@ class WorkLog(SQLModel, table=True):
         default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc))
+    total_duration_minutes: float = Field(nullable=False)
 
     # Relationships
     user: "User" = Relationship(back_populates="worklogs")
@@ -177,18 +178,6 @@ class WorkLog(SQLModel, table=True):
         back_populates="worklog", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
 
-    remittance_worklogs: List["RemittanceWorkLog"] = Relationship(
-        back_populates="worklog"
-    )
-
-    # Computed properties
-    @property
-    def total_duration_minutes(self) -> float:
-        return sum(segment.duration_minutes for segment in self.time_segments)
-
-    @property
-    def total_amount(self) -> float:
-        return sum(ts.duration for ts in self.time_segments)
 
 # -----------------------------
 # TimeSegment Model
@@ -214,15 +203,6 @@ class TimeSegment(SQLModel, table=True):
     # Relationships
     worklog: WorkLog = Relationship(back_populates="time_segments")
 
-    # Computed properties
-    @property
-    def duration_minutes(self) -> float:
-        return (self.end_time - self.start_time).total_seconds() / 60
-
-    @property
-    def duration(self) -> float:
-        return self.duration_minutes
-
 
 # -----------------------------
 # Remittance Model
@@ -245,24 +225,3 @@ class Remittance(SQLModel, table=True):
 
     # Relationships
     user: "User" = Relationship(back_populates="remittances")
-    remittance_worklogs: List["RemittanceWorkLog"] = Relationship(
-        back_populates="remittance", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-
-# -----------------------------
-# RemittanceWorkLog Model
-# -----------------------------
-
-
-class RemittanceWorkLog(SQLModel, table=True):
-    """Links worklogs to remittances with amount tracking."""
-    id: UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    remittance_id: UUID = Field(foreign_key="remittance.id", index=True)
-    worklog_id: UUID = Field(foreign_key="worklog.id", index=True)
-    amount: float
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc))
-
-    # Relationships
-    remittance: Remittance = Relationship(back_populates="remittance_worklogs")
-    worklog: WorkLog = Relationship(back_populates="remittance_worklogs")
